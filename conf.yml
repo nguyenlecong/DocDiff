@@ -14,8 +14,10 @@ PRE_ORI : 'True'          # if True, predict $x_0$, else predict $\epsilon$.
 
 
 # train
-PATH_GT : ''              # path of ground truth
-PATH_IMG : ''             # path of input
+PATH_GT : '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/train/labels'              # path of ground truth
+PATH_IMG : '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/train/images'             # path of input
+PATH_GT_VAL: '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/val/labels'
+PATH_IMG_VAL: '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/val/images'
 BATCH_SIZE : 32           # training batch size
 NUM_WORKERS : 16           # number of workers
 ITERATION_MAX : 1000000   # max training iteration
@@ -27,21 +29,21 @@ SAVE_MODEL_EVERY : 10000  # save model every SAVE_MODEL_EVERY iterations
 EMA: 'True'               # if True, use EMA
 CONTINUE_TRAINING : 'False'               # if True, continue training
 CONTINUE_TRAINING_STEPS : 10000           # continue training from CONTINUE_TRAINING_STEPS
-PRETRAINED_PATH_INITIAL_PREDICTOR : ''    # path of pretrained initial predictor
-PRETRAINED_PATH_DENOISER : ''             # path of pretrained denoiser
+PRETRAINED_PATH_INITIAL_PREDICTOR : 'checksave/seal_init.pth'    # path of pretrained initial predictor
+PRETRAINED_PATH_DENOISER : 'checksave/seal_denoiser.pth'             # path of pretrained denoiser
 WEIGHT_SAVE_PATH : './checksave'          # path to save model
 TRAINING_PATH : './Training'              # path of training data
 BETA_LOSS : 50            # hyperparameter to balance the pixel loss and the diffusion loss
 HIGH_LOW_FREQ : 'True'    # if True, training with frequency separation
-
+PATIENCE: 100             # EarlyStopping patience (epochs without improvement)
 
 # test
-NATIVE_RESOLUTION : 'False'               # if True, test with native resolution
+NATIVE_RESOLUTION : 'True'               # if True, test with native resolution
 DPM_SOLVER : 'False'      # if True, test with DPM_solver
 DPM_STEP : 20             # DPM_solver step
 BATCH_SIZE_VAL : 1        # test batch size
-TEST_PATH_GT : ''         # path of ground truth
-TEST_PATH_IMG : ''        # path of input
-TEST_INITIAL_PREDICTOR_WEIGHT_PATH : ''   # path of initial predictor
-TEST_DENOISER_WEIGHT_PATH : ''            # path of denoiser
-TEST_IMG_SAVE_PATH : './results'          # path to save results
+TEST_PATH_GT : '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/test/labels'         # path of ground truth
+TEST_PATH_IMG : '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/test/images'        # path of input
+TEST_INITIAL_PREDICTOR_WEIGHT_PATH : 'checksave/model_init_best.pth'   # path of initial predictor
+TEST_DENOISER_WEIGHT_PATH : 'checksave/model_denoiser_best.pth'            # path of denoiser
+TEST_IMG_SAVE_PATH : './results/model_1/'          # path to save results

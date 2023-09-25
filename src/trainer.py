@@ -1,4 +1,5 @@
 import os
+import math
 from schedule.schedule import Schedule
 from model.DocDiff import DocDiff, EMA
 from schedule.diffusionSample import GaussianDiffusion
@@ -11,7 +12,7 @@ from torchvision.utils import save_image
 from tqdm import tqdm
 import copy
 from src.sobel import Laplacian
-
+from src.early_stopping import EarlyStopping
 
 def init__result_Dir():
     work_dir = os.path.join(os.getcwd(), 'Training')
@@ -28,6 +29,10 @@ def init__result_Dir():
     max_model += 1
     path = os.path.join(work_dir, str(max_model))
     os.mkdir(path)
+
+    log_dir = os.path.join(path, 'log')
+    os.mkdir(log_dir)
+
     return path
 
 
@@ -56,6 +61,8 @@ class Trainer:
         self.continue_training_steps = 0
         self.path_train_gt = config.PATH_GT
         self.path_train_img = config.PATH_IMG
+        self.path_val_gt = config.PATH_GT_VAL
+        self.path_val_img = config.PATH_IMG_VAL
         self.iteration_max = config.ITERATION_MAX
         self.LR = config.LR
         self.cross_entropy = nn.BCELoss()
@@ -87,6 +94,10 @@ class Trainer:
             self.batch_size = config.BATCH_SIZE
             self.dataloader_train = DataLoader(dataset_train, batch_size=self.batch_size, shuffle=True, drop_last=False,
                                                num_workers=config.NUM_WORKERS)
+            
+            dataset_val = DocData(self.path_val_img, self.path_val_gt, config.IMAGE_SIZE, self.mode)
+            self.dataloader_val = DataLoader(dataset_val, batch_size=self.batch_size//2, shuffle=True, drop_last=False,
+                                             num_workers=config.NUM_WORKERS)
         else:
             dataset_test = DocData(config.TEST_PATH_IMG, config.TEST_PATH_GT, config.IMAGE_SIZE, self.mode)
             self.dataloader_test = DataLoader(dataset_test, batch_size=config.BATCH_SIZE_VAL, shuffle=False,
@@ -105,6 +116,8 @@ class Trainer:
         if self.high_low_freq == 'True':
             self.high_filter = Laplacian().to(self.device)
 
+        self.stopper = EarlyStopping(config.PATIENCE)
+        
     def test(self):
         def crop_concat(img, size=128):
             shape = img.shape
@@ -163,20 +176,104 @@ class Trainer:
                     init_predict = crop_concat_back(temp, init_predict)
                     sampledImgs = crop_concat_back(temp, sampledImgs)
                     img = temp
-                img_save = torch.cat((img, gt, init_predict.cpu(), min_max(sampledImgs.cpu()), finalImgs.cpu()), dim=3)
-                save_image(img_save, os.path.join(
-                    self.test_img_save_path, f"{name[0]}.png"), nrow=4)
 
+                # img_save = torch.cat((img, gt, init_predict.cpu(), min_max(sampledImgs.cpu()), finalImgs.cpu()), dim=3)
+                # img_save = torch.cat((img, gt, finalImgs.cpu()), dim=3)
+                img_save = torch.cat((img, finalImgs.cpu()), dim=3)
+                save_image(img_save, os.path.join(self.test_img_save_path, name[0]), nrow=4)
+                
+    @staticmethod
+    def mean(x):
+        return sum(x) / len(x)
+    
+    def val(self, save_img_path, val_logger, epoch):
+        self.network.eval()
+
+        tq = tqdm(self.dataloader_val)
+
+        losses = []
+        ddpm_losses = []
+        low_freq_pixel_losses = []
+        pixel_losses = []
+        for img, gt, name in tq:
+            t = torch.randint(0, self.num_timesteps, (img.shape[0],)).long().to(self.device)
+            init_predict, noise_pred, noisy_image, noise_ref = self.network(gt.to(self.device), img.to(self.device),
+                                                                            t, self.diffusion)
+            if self.pre_ori == 'True':
+                if self.high_low_freq == 'True':
+                    residual_high = self.high_filter(gt.to(self.device) - init_predict)
+                    ddpm_loss = 2*self.loss(self.high_filter(noise_pred), residual_high) + self.loss(noise_pred, gt.to(self.device) - init_predict)
+                else:
+                    ddpm_loss = self.loss(noise_pred, gt.to(self.device) - init_predict)
+            else:
+                ddpm_loss = self.loss(noise_pred, noise_ref.to(self.device))
+            if self.high_low_freq == 'True':
+                low_high_loss = self.loss(init_predict, gt.to(self.device))
+                low_freq_loss = self.loss(init_predict - self.high_filter(init_predict), gt.to(self.device) - self.high_filter(gt.to(self.device)))
+                pixel_loss = low_high_loss + 2*low_freq_loss
+            else:
+                pixel_loss = self.loss(init_predict, gt.to(self.device))
+
+            loss = ddpm_loss + self.beta_loss * (pixel_loss) / self.num_timesteps
+            if self.high_low_freq == 'True':
+                tq.set_postfix(loss=loss.item(), high_freq_ddpm_loss=ddpm_loss.item(), low_freq_pixel_loss=low_freq_loss.item(), pixel_loss=low_high_loss.item())
+                losses.append(loss.item())
+                ddpm_losses.append(ddpm_loss.item())
+                low_freq_pixel_losses.append(low_freq_loss.item())
+                pixel_losses.append(low_high_loss.item())
+            else:
+                tq.set_postfix(loss=loss.item(), ddpm_loss=ddpm_loss.item(), pixel_loss=pixel_loss.item())
+                losses.append(loss.item())
+                ddpm_losses.append(ddpm_loss.item())
+                pixel_losses.append(pixel_loss.item())
+        if epoch % 100 == 0: 
+            img_save = torch.cat([img, gt, noise_pred.cpu() + init_predict.cpu()], dim=3)
+            save_image(img_save, os.path.join(save_img_path, f"val_epoch_{epoch}.png"), nrow=4)
+                
+        if self.high_low_freq == 'True':
+            line = f'loss={self.mean(losses)}, high_freq_ddpm_loss={self.mean(ddpm_losses)}, low_freq_pixel_loss={self.mean(low_freq_pixel_losses)}, pixel_loss={self.mean(pixel_losses)}'
+        else:
+            line = f'loss={self.mean(losses)}, ddpm_loss={self.mean(ddpm_losses)}, pixel_loss={self.mean(pixel_losses)}'
+        val_logger.write(line + '\n')
+
+        stop = self.stopper(epoch, self.mean(losses))
+        if stop:
+            print('Saving best models')
+            if not os.path.exists(self.weight_save_path):
+                os.makedirs(self.weight_save_path)
+            torch.save(self.network.init_predictor.state_dict(),
+                        os.path.join(self.weight_save_path, f'model_init_best.pth'))
+            torch.save(self.network.denoiser.state_dict(),
+                        os.path.join(self.weight_save_path, f'model_denoiser_best.pth'))
+            if self.EMA_or_not == 'True':
+                torch.save(self.ema_model.init_predictor.state_dict(),
+                            os.path.join(self.weight_save_path, f'model_init_ema_best.pth'))
+                torch.save(self.ema_model.denoiser.state_dict(),
+                            os.path.join(self.weight_save_path, f'model_denoiser_ema_best.pth'))
+        return stop
 
     def train(self):
         optimizer = optim.AdamW(self.network.parameters(), lr=self.LR, weight_decay=1e-4)
         iteration = self.continue_training_steps
         save_img_path = init__result_Dir()
+        train_logger = open(f"{save_img_path}/log/train_log.txt", "w")
+        val_logger = open(f"{save_img_path}/log/val_log.txt", "w")
+
         print('Starting Training', f"Step is {self.num_timesteps}")
 
+        epoch = 0
+        max_epoch = math.ceil(self.iteration_max / len(self.dataloader_train))
         while iteration < self.iteration_max:
 
             tq = tqdm(self.dataloader_train)
+
+            losses = []
+            ddpm_losses = []
+            low_freq_pixel_losses = []
+            pixel_losses = []
+
+            epoch += 1
+            print(f'Epoch {epoch} / {max_epoch}')
 
             for img, gt, name in tq:
                 tq.set_description(f'Iteration {iteration} / {self.iteration_max}')
@@ -206,8 +303,15 @@ class Trainer:
                 optimizer.step()
                 if self.high_low_freq == 'True':
                     tq.set_postfix(loss=loss.item(), high_freq_ddpm_loss=ddpm_loss.item(), low_freq_pixel_loss=low_freq_loss.item(), pixel_loss=low_high_loss.item())
+                    losses.append(loss.item())
+                    ddpm_losses.append(ddpm_loss.item())
+                    low_freq_pixel_losses.append(low_freq_loss.item())
+                    pixel_losses.append(low_high_loss.item())
                 else:
                     tq.set_postfix(loss=loss.item(), ddpm_loss=ddpm_loss.item(), pixel_loss=pixel_loss.item())
+                    losses.append(loss.item())
+                    ddpm_losses.append(ddpm_loss.item())
+                    pixel_losses.append(pixel_loss.item())
                 if iteration % 500 == 0:
                     if not os.path.exists(save_img_path):
                         os.makedirs(save_img_path)
@@ -218,7 +322,7 @@ class Trainer:
                         else:
                             img_save = torch.cat([img, gt, init_predict.cpu(), noise_pred.cpu() + init_predict.cpu()], dim=3)
                     save_image(img_save, os.path.join(
-                        save_img_path, f"{iteration}.png"), nrow=4)
+                        save_img_path, f"train_iteration_{iteration}.png"), nrow=4)
                 iteration += 1
                 if self.EMA_or_not == 'True':
                     if iteration % self.ema_every == 0 and iteration > self.start_ema:
@@ -239,7 +343,16 @@ class Trainer:
                         torch.save(self.ema_model.denoiser.state_dict(),
                                    os.path.join(self.weight_save_path, f'model_denoiser_ema_{iteration}.pth'))
 
+            if self.high_low_freq == 'True':
+                line = f'loss={self.mean(losses)}, high_freq_ddpm_loss={self.mean(ddpm_losses)}, low_freq_pixel_loss={self.mean(low_freq_pixel_losses)}, pixel_loss={self.mean(pixel_losses)}'
+            else:
+                line = f'loss={self.mean(losses)}, ddpm_loss={self.mean(ddpm_losses)}, pixel_loss={self.mean(pixel_losses)}'
+            train_logger.write(line + '\n')
 
+            print('Starting Validating')
+            stop = self.val(save_img_path, val_logger, epoch)
+            if stop:
+                break
 
 def dpm_solver(betas, model, x_T, steps, model_kwargs):
     # You need to firstly define your model and the extra inputs of your model,
