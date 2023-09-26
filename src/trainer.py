@@ -116,8 +116,9 @@ class Trainer:
         if self.high_low_freq == 'True':
             self.high_filter = Laplacian().to(self.device)
 
-        self.stopper = EarlyStopping(config.PATIENCE)
-        
+        self.patience = config.PATIENCE
+        self.stopper = EarlyStopping(self.patience)
+
     def test(self):
         def crop_concat(img, size=128):
             shape = img.shape
@@ -176,17 +177,23 @@ class Trainer:
                     init_predict = crop_concat_back(temp, init_predict)
                     sampledImgs = crop_concat_back(temp, sampledImgs)
                     img = temp
-
+                    
                 # img_save = torch.cat((img, gt, init_predict.cpu(), min_max(sampledImgs.cpu()), finalImgs.cpu()), dim=3)
                 # img_save = torch.cat((img, gt, finalImgs.cpu()), dim=3)
                 img_save = torch.cat((img, finalImgs.cpu()), dim=3)
                 save_image(img_save, os.path.join(self.test_img_save_path, name[0]), nrow=4)
-                
+
     @staticmethod
     def mean(x):
         return sum(x) / len(x)
     
-    def val(self, save_img_path, val_logger, epoch):
+    @staticmethod
+    def log(path, line):
+        logger = open(path, "a")
+        logger.write(line + '\n')
+        logger.close()
+    
+    def val(self, save_img_path, log_path, epoch):
         self.network.eval()
 
         tq = tqdm(self.dataloader_val)
@@ -226,7 +233,7 @@ class Trainer:
                 losses.append(loss.item())
                 ddpm_losses.append(ddpm_loss.item())
                 pixel_losses.append(pixel_loss.item())
-        if epoch % 100 == 0: 
+        if epoch % self.patience == 0: 
             img_save = torch.cat([img, gt, noise_pred.cpu() + init_predict.cpu()], dim=3)
             save_image(img_save, os.path.join(save_img_path, f"val_epoch_{epoch}.png"), nrow=4)
                 
@@ -234,7 +241,7 @@ class Trainer:
             line = f'loss={self.mean(losses)}, high_freq_ddpm_loss={self.mean(ddpm_losses)}, low_freq_pixel_loss={self.mean(low_freq_pixel_losses)}, pixel_loss={self.mean(pixel_losses)}'
         else:
             line = f'loss={self.mean(losses)}, ddpm_loss={self.mean(ddpm_losses)}, pixel_loss={self.mean(pixel_losses)}'
-        val_logger.write(line + '\n')
+        self.log(log_path, line)
 
         stop = self.stopper(epoch, self.mean(losses))
         if stop:
@@ -256,14 +263,13 @@ class Trainer:
         optimizer = optim.AdamW(self.network.parameters(), lr=self.LR, weight_decay=1e-4)
         iteration = self.continue_training_steps
         save_img_path = init__result_Dir()
-        train_logger = open(f"{save_img_path}/log/train_log.txt", "w")
-        val_logger = open(f"{save_img_path}/log/val_log.txt", "w")
-
         print('Starting Training', f"Step is {self.num_timesteps}")
 
-        epoch = 0
+        epoch = -1
         max_epoch = math.ceil(self.iteration_max / len(self.dataloader_train))
         while iteration < self.iteration_max:
+            epoch += 1
+            print(f'Epoch {epoch} / {max_epoch}')
 
             tq = tqdm(self.dataloader_train)
 
@@ -271,10 +277,6 @@ class Trainer:
             ddpm_losses = []
             low_freq_pixel_losses = []
             pixel_losses = []
-
-            epoch += 1
-            print(f'Epoch {epoch} / {max_epoch}')
-
             for img, gt, name in tq:
                 tq.set_description(f'Iteration {iteration} / {self.iteration_max}')
                 self.network.train()
@@ -312,7 +314,7 @@ class Trainer:
                     losses.append(loss.item())
                     ddpm_losses.append(ddpm_loss.item())
                     pixel_losses.append(pixel_loss.item())
-                if iteration % 500 == 0:
+                if iteration % self.save_model_every == 0:
                     if not os.path.exists(save_img_path):
                         os.makedirs(save_img_path)
                     img_save = torch.cat([img, gt, init_predict.cpu()], dim=3)
@@ -347,10 +349,10 @@ class Trainer:
                 line = f'loss={self.mean(losses)}, high_freq_ddpm_loss={self.mean(ddpm_losses)}, low_freq_pixel_loss={self.mean(low_freq_pixel_losses)}, pixel_loss={self.mean(pixel_losses)}'
             else:
                 line = f'loss={self.mean(losses)}, ddpm_loss={self.mean(ddpm_losses)}, pixel_loss={self.mean(pixel_losses)}'
-            train_logger.write(line + '\n')
+            self.log(f"{save_img_path}/log/train_log.txt", line)
 
             print('Starting Validating')
-            stop = self.val(save_img_path, val_logger, epoch)
+            stop = self.val(save_img_path, f"{save_img_path}/log/val_log.txt", epoch)
             if stop:
                 break
 
