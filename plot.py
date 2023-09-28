@@ -20,6 +20,9 @@ def parse_log(log_path):
     return losses, high_freq_ddpm_losses, low_freq_pixel_losses, pixel_losses
     
 def plot(log_path):
+    if not os.path.exists(log_path):
+        return
+
     dir = os.path.dirname(log_path)
     basename = os.path.basename(log_path)[:-4]
 

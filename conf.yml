@@ -44,6 +44,6 @@ DPM_STEP : 20             # DPM_solver step
 BATCH_SIZE_VAL : 1        # test batch size
 TEST_PATH_GT : '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/test/labels'         # path of ground truth
 TEST_PATH_IMG : '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/test/images'        # path of input
-TEST_INITIAL_PREDICTOR_WEIGHT_PATH : 'checksave/seal_init.pth'   # path of initial predictor
-TEST_DENOISER_WEIGHT_PATH : 'checksave/seal_denoiser.pth'            # path of denoiser
+TEST_INITIAL_PREDICTOR_WEIGHT_PATH : 'checksave/model_init_best.pth'   # path of initial predictor
+TEST_DENOISER_WEIGHT_PATH : 'checksave/model_denoiser_best.pth'            # path of denoiser
 TEST_IMG_SAVE_PATH : './results/model_1/'          # path to save results
