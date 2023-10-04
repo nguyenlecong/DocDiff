@@ -1,4 +1,6 @@
 import os
+import sys
+
 import matplotlib.pyplot as plt
 
 def parse_log(log_path):
@@ -48,5 +50,6 @@ def plot(log_path):
     plt.savefig(f'{dir}/{basename}.png')
 
 if __name__ == '__main__':
-    log_path = ['Training/1/log/train_log.txt', 'Training/1/log/val_log.txt']
+    idx = sys.argv[1]
+    log_path = [f'Training/{idx}/log/train_log.txt', f'Training/{idx}/log/val_log.txt']
     [plot(log) for log in log_path] 

@@ -265,7 +265,7 @@ class Trainer:
         save_img_path = init__result_Dir()
         print('Starting Training', f"Step is {self.num_timesteps}")
 
-        epoch = -1
+        epoch = math.ceil(iteration / len(self.dataloader_train)) - 1
         max_epoch = math.ceil(self.iteration_max / len(self.dataloader_train))
         while iteration < self.iteration_max:
             epoch += 1
