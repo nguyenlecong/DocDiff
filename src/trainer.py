@@ -50,7 +50,7 @@ class Trainer:
             n_channels=config.MODEL_CHANNELS,
             ch_mults=config.CHANNEL_MULT,
             n_blocks=config.NUM_RESBLOCKS
-        ).to(self.device)
+        ).to(self.device) 
         self.diffusion = GaussianDiffusion(self.network.denoiser, config.TIMESTEPS, self.schedule).to(self.device)
         self.test_img_save_path = config.TEST_IMG_SAVE_PATH
         if not os.path.exists(self.test_img_save_path):
@@ -243,7 +243,7 @@ class Trainer:
             line = f'loss={self.mean(losses)}, ddpm_loss={self.mean(ddpm_losses)}, pixel_loss={self.mean(pixel_losses)}'
         self.log(log_path, line)
 
-        stop = self.stopper(epoch, self.mean(losses))
+        stop = self.stopper(epoch, round(self.mean(losses), 3))
         if stop:
             print('Saving best models')
             if not os.path.exists(self.weight_save_path):
@@ -331,19 +331,19 @@ class Trainer:
                         print('EMA update')
                         self.EMA.update_model_average(self.ema_model, self.network)
 
-                if iteration % self.save_model_every == 0:
-                    print('Saving models')
-                    if not os.path.exists(self.weight_save_path):
-                        os.makedirs(self.weight_save_path)
-                    torch.save(self.network.init_predictor.state_dict(),
-                               os.path.join(self.weight_save_path, f'model_init_{iteration}.pth'))
-                    torch.save(self.network.denoiser.state_dict(),
-                               os.path.join(self.weight_save_path, f'model_denoiser_{iteration}.pth'))
-                    if self.EMA_or_not == 'True':
-                        torch.save(self.ema_model.init_predictor.state_dict(),
-                                   os.path.join(self.weight_save_path, f'model_init_ema_{iteration}.pth'))
-                        torch.save(self.ema_model.denoiser.state_dict(),
-                                   os.path.join(self.weight_save_path, f'model_denoiser_ema_{iteration}.pth'))
+                # if iteration % self.save_model_every == 0:
+                    # print('Saving models')
+            if not os.path.exists(self.weight_save_path):
+                os.makedirs(self.weight_save_path)
+            torch.save(self.network.init_predictor.state_dict(),
+                    os.path.join(self.weight_save_path, f'model_init_last.pth'))
+            torch.save(self.network.denoiser.state_dict(),
+                    os.path.join(self.weight_save_path, f'model_denoiser_last.pth'))
+            if self.EMA_or_not == 'True':
+                torch.save(self.ema_model.init_predictor.state_dict(),
+                        os.path.join(self.weight_save_path, f'model_init_ema_last.pth'))
+                torch.save(self.ema_model.denoiser.state_dict(),
+                        os.path.join(self.weight_save_path, f'model_denoiser_ema_last.pth'))
 
             if self.high_low_freq == 'True':
                 line = f'loss={self.mean(losses)}, high_freq_ddpm_loss={self.mean(ddpm_losses)}, low_freq_pixel_loss={self.mean(low_freq_pixel_losses)}, pixel_loss={self.mean(pixel_losses)}'
