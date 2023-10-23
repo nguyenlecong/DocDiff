@@ -1,4 +1,5 @@
 import os
+import sys
 import math
 from schedule.schedule import Schedule
 from model.DocDiff import DocDiff, EMA
@@ -301,6 +302,11 @@ class Trainer:
                     pixel_loss = self.loss(init_predict, gt.to(self.device))
 
                 loss = ddpm_loss + self.beta_loss * (pixel_loss) / self.num_timesteps
+                
+                if not math.isfinite(loss):
+                    print(f"Loss is {loss}, stopping training")
+                    sys.exit(1)
+                
                 loss.backward()
                 optimizer.step()
                 if self.high_low_freq == 'True':
