@@ -244,8 +244,8 @@ class Trainer:
             line = f'loss={self.mean(losses)}, ddpm_loss={self.mean(ddpm_losses)}, pixel_loss={self.mean(pixel_losses)}'
         self.log(log_path, line)
 
-        stop = self.stopper(epoch, round(self.mean(losses), 3))
-        if stop:
+        mloss = round(self.mean(losses), 3)
+        if mloss <= self.stopper.best_fitness:
             print('Saving best models')
             if not os.path.exists(self.weight_save_path):
                 os.makedirs(self.weight_save_path)
@@ -258,6 +258,8 @@ class Trainer:
                             os.path.join(self.weight_save_path, f'model_init_ema_best.pth'))
                 torch.save(self.ema_model.denoiser.state_dict(),
                             os.path.join(self.weight_save_path, f'model_denoiser_ema_best.pth'))
+        
+        stop = self.stopper(epoch, mloss)
         return stop
 
     def train(self):
