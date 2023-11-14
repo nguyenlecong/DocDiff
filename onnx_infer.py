@@ -1,6 +1,7 @@
 import cv2
 import torch
 import onnxruntime
+import numpy as np
 from torchvision.transforms import ToTensor
 
 from src.config import load_config
@@ -25,6 +26,10 @@ class Inferer():
     @staticmethod     
     def to_numpy(tensor):
         return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
+    @staticmethod
+    def from_numpy(x, device):
+        return torch.from_numpy(x).to(device) if isinstance(x, np.ndarray) else x
 
     @staticmethod
     def transform_image(x):
@@ -71,7 +76,7 @@ class Inferer():
         
         ort_inputs = {self.init_predictor.get_inputs()[0].name: self.to_numpy(img),}
         init_predict = self.init_predictor.run(None, ort_inputs)[0]
-        init_predict = torch.Tensor(init_predict).to(self.device)
+        init_predict = self.from_numpy(init_predict, self.device)
 
         noisyImage = torch.randn_like(img).to(self.device)
         sampledImgs = self.sampler(noisyImage, init_predict, self.pre_ori)

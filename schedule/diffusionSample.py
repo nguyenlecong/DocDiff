@@ -23,6 +23,8 @@ def extract(v, t, x_shape):
 def to_numpy(tensor):
     return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
 
+def from_numpy(x, device):
+    return torch.from_numpy(x).to(device) if isinstance(x, np.ndarray) else x
 
 class GaussianDiffusion(nn.Module):
     def __init__(self, model, T, schedule):
@@ -96,7 +98,7 @@ class GaussianDiffusion(nn.Module):
                                   self.model.get_inputs()[1].name: [to_numpy(t)[0]]
                                  }
                     ori = self.model.run(None, ort_inputs)[0]
-                    ori = torch.Tensor(ori).to(t.device)
+                    ori = from_numpy(ori, t.device)
 
                     eps = x_t - extract_(self.sqrt_gammas, t, ori.shape) * ori
                     eps = eps / extract_(self.sqrt_one_minus_gammas, t, eps.shape)
@@ -109,7 +111,7 @@ class GaussianDiffusion(nn.Module):
                                   self.model.get_inputs()[1].name: [to_numpy(t)[0]]
                                  }
                     ori = self.model.run(None, ort_inputs)[0]
-                    ori = torch.Tensor(ori).to(t.device)
+                    ori = from_numpy(ori, t.device)
                     x_t = ori
 
         x_0 = x_t
