@@ -20,6 +20,9 @@ def extract(v, t, x_shape):
     out = torch.gather(v, index=t, dim=0).float().to(device)
     return out.view([t.shape[0]] + [1] * (len(x_shape) - 1))
 
+def to_numpy(tensor):
+    return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+
 
 class GaussianDiffusion(nn.Module):
     def __init__(self, model, T, schedule):
@@ -86,12 +89,28 @@ class GaussianDiffusion(nn.Module):
                 assert torch.isnan(x_t).int().sum() == 0, "nan in tensor."
             else:
                 if time_step > 0:
-                    ori = self.model(torch.cat((x_t, cond_), dim=1), t)
+                    # ori = self.model(torch.cat((x_t, cond_), dim=1), t)
+
+                    x = torch.cat((x_t, cond_), dim=1)
+                    ort_inputs = {self.model.get_inputs()[0].name: to_numpy(x),
+                                  self.model.get_inputs()[1].name: [to_numpy(t)[0]]
+                                 }
+                    ori = self.model.run(None, ort_inputs)[0]
+                    ori = torch.Tensor(ori).to(t.device)
+
                     eps = x_t - extract_(self.sqrt_gammas, t, ori.shape) * ori
                     eps = eps / extract_(self.sqrt_one_minus_gammas, t, eps.shape)
                     x_t = extract_(self.sqrt_gammas, t - 1, ori.shape) * ori + extract_(self.sqrt_one_minus_gammas, t - 1, eps.shape) * eps
                 else:
-                    x_t = self.model(torch.cat((x_t, cond_), dim=1), t)
+                    # x_t = self.model(torch.cat((x_t, cond_), dim=1), t)
+
+                    x = torch.cat((x_t, cond_), dim=1)
+                    ort_inputs = {self.model.get_inputs()[0].name: to_numpy(x),
+                                  self.model.get_inputs()[1].name: [to_numpy(t)[0]]
+                                 }
+                    ori = self.model.run(None, ort_inputs)[0]
+                    ori = torch.Tensor(ori).to(t.device)
+                    x_t = ori
 
         x_0 = x_t
         return x_0
