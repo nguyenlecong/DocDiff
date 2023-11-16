@@ -4,9 +4,7 @@ from triton.processor import Processor as SealRemoval
 class Inferer():
     def __init__(self):
         config_file = 'conf.yml'
-        init_predictor_config_file = 'triton/seal_removal_init_predictor_config.yml'
-        denoiser_config_file = 'triton/seal_removal_denoiser_config.yml'
-        self.inferer = SealRemoval(config_file, init_predictor_config_file, denoiser_config_file)
+        self.inferer = SealRemoval(config_file)
 
     def infer(self, img):
         output = self.inferer(img)

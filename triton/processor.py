@@ -12,7 +12,7 @@ from schedule.diffusionSample import GaussianDiffusion
 
 
 class Processor():
-    def __init__(self, config_file, init_predictor_config_file, denoiser_config_file):
+    def __init__(self, config_file):
         config = read_config(config_file)
 
         self.pre_ori = config.PRE_ORI
@@ -22,8 +22,8 @@ class Processor():
             device = f"cuda:{device}"
         self.device = torch.device(device)
 
-        self.init_predictor = BaseClient(init_predictor_config_file)
-        denoiser = BaseClient(denoiser_config_file)
+        self.init_predictor = BaseClient(config.init_predictor_model)
+        denoiser = BaseClient(config.denoiser_model)
 
         schedule = Schedule(config.SCHEDULE, config.TIMESTEPS)
         diffusion = GaussianDiffusion(denoiser, config.TIMESTEPS, schedule).to(self.device)

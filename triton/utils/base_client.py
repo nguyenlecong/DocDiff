@@ -1,7 +1,6 @@
 import sys
 import cv2
 import numpy as np
-from .utils import read_config
 import tritonclient.grpc as grpcclient
 from tritonclient.utils import InferenceServerException
 
@@ -12,8 +11,8 @@ Base client to process image via Trition Server
 
 class BaseClient():
 
-    def __init__(self, config_file):
-        self.config = read_config(config_file)
+    def __init__(self, config):
+        self.config = config
 
     def __call__(self, ):
         raise NotImplementedError

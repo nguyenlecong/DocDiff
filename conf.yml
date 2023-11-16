@@ -49,3 +49,37 @@ TEST_DENOISER_WEIGHT_PATH : 'checksave/model_denoiser_best.pth'            # pat
 TEST_IMG_SAVE_PATH : './results/model_1/'          # path to save results
 
 CUDA_VISIBLE_DEVICES: "0"
+
+denoiser_model:
+  # model settings
+  model:
+    name: seal_removal_denoiser
+    version: '1'
+
+  # server settings
+  server:
+    url: 192.168.0.104:8001
+    verbose: 
+    ssl:
+    root_certificates:
+    private_key:
+    certificate_chain:
+    client_timeout:
+    grpc_compression_algorithm:
+
+init_predictor_model:
+  # model settings
+  model:
+    name: seal_removal_init_predictor
+    version: '1'
+
+  # server settings
+  server:
+    url: 192.168.0.104:8001
+    verbose: 
+    ssl:
+    root_certificates:
+    private_key:
+    certificate_chain:
+    client_timeout:
+    grpc_compression_algorithm:
