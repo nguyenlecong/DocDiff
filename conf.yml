@@ -47,3 +47,5 @@ TEST_PATH_IMG : '/hdd/nguyenlc/dms/remove_stamp/stamp_data/DocDiff_Data/dataset/
 TEST_INITIAL_PREDICTOR_WEIGHT_PATH : 'checksave/model_init_best.pth'   # path of initial predictor
 TEST_DENOISER_WEIGHT_PATH : 'checksave/model_denoiser_best.pth'            # path of denoiser
 TEST_IMG_SAVE_PATH : './results/model_1/'          # path to save results
+
+CUDA_VISIBLE_DEVICES: "0"
