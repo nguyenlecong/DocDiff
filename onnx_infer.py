@@ -1,4 +1,3 @@
-import cv2
 import torch
 import onnxruntime
 import numpy as np
@@ -22,14 +21,6 @@ class Inferer():
         schedule = Schedule(config.SCHEDULE, config.TIMESTEPS)
         diffusion = GaussianDiffusion(denoiser, config.TIMESTEPS, schedule).to(self.device)
         self.sampler = diffusion
-
-    @staticmethod     
-    def to_numpy(tensor):
-        return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
-
-    @staticmethod
-    def from_numpy(x, device):
-        return torch.from_numpy(x).to(device) if isinstance(x, np.ndarray) else x
 
     @staticmethod
     def transform_image(x):
@@ -67,16 +58,15 @@ class Inferer():
                     crop_concat = torch.cat((crop_concat, crop), dim=2)
             return crop_concat[:, :, :shape[2], :shape[3]]
         
-    def infer(self, img_path):
-        img = cv2.imread(img_path)
+    def infer(self, img):
         img = self.transform_image(img)
         
         temp = img
         img = self.crop_concat(img)
         
-        ort_inputs = {self.init_predictor.get_inputs()[0].name: self.to_numpy(img),}
+        ort_inputs = {self.init_predictor.get_inputs()[0].name: img.cpu().numpy()}
         init_predict = self.init_predictor.run(None, ort_inputs)[0]
-        init_predict = self.from_numpy(init_predict, self.device)
+        init_predict = torch.from_numpy(init_predict).to(self.device)
 
         noisyImage = torch.randn_like(img).to(self.device)
         sampledImgs = self.sampler(noisyImage, init_predict, self.pre_ori)
@@ -88,8 +78,12 @@ class Inferer():
         return finalImgs
 
 if __name__ == '__main__':
+    import cv2
+    
     inferer = Inferer()
 
     img_path = 'demo/input.png'
-    output = inferer.infer(img_path)
+    img = cv2.imread(img_path)
+
+    output = inferer.infer(img)
     cv2.imwrite('demo/onnx_output.png', output)

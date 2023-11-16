@@ -20,11 +20,6 @@ def extract(v, t, x_shape):
     out = torch.gather(v, index=t, dim=0).float().to(device)
     return out.view([t.shape[0]] + [1] * (len(x_shape) - 1))
 
-def to_numpy(tensor):
-    return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
-
-def from_numpy(x, device):
-    return torch.from_numpy(x).to(device) if isinstance(x, np.ndarray) else x
 
 class GaussianDiffusion(nn.Module):
     def __init__(self, model, T, schedule):
@@ -72,6 +67,15 @@ class GaussianDiffusion(nn.Module):
         y_noisy = extract_(self.sqrt_gammas, t, y.shape) * y + extract_(self.sqrt_one_minus_gammas, t, noise.shape) * noise
         return y_noisy, noise
 
+    def subprocess(self, x_t, cond_, t):
+        x = torch.cat((x_t, cond_), dim=1)
+        ort_inputs = {self.model.get_inputs()[0].name: x.cpu().numpy(),
+                        self.model.get_inputs()[1].name: t.cpu().numpy()[:1]
+                        }
+        ori = self.model.run(None, ort_inputs)[0]
+        ori = torch.from_numpy(ori).to(t.device)
+        return ori
+
     def forward(self, x_T, cond, pre_ori='False'):
         """
         Algorithm 2.
@@ -93,12 +97,7 @@ class GaussianDiffusion(nn.Module):
                 if time_step > 0:
                     # ori = self.model(torch.cat((x_t, cond_), dim=1), t)
 
-                    x = torch.cat((x_t, cond_), dim=1)
-                    ort_inputs = {self.model.get_inputs()[0].name: to_numpy(x),
-                                  self.model.get_inputs()[1].name: [to_numpy(t)[0]]
-                                 }
-                    ori = self.model.run(None, ort_inputs)[0]
-                    ori = from_numpy(ori, t.device)
+                    ori = self.subprocess(x_t, cond_, t)
 
                     eps = x_t - extract_(self.sqrt_gammas, t, ori.shape) * ori
                     eps = eps / extract_(self.sqrt_one_minus_gammas, t, eps.shape)
@@ -106,12 +105,7 @@ class GaussianDiffusion(nn.Module):
                 else:
                     # x_t = self.model(torch.cat((x_t, cond_), dim=1), t)
 
-                    x = torch.cat((x_t, cond_), dim=1)
-                    ort_inputs = {self.model.get_inputs()[0].name: to_numpy(x),
-                                  self.model.get_inputs()[1].name: [to_numpy(t)[0]]
-                                 }
-                    ori = self.model.run(None, ort_inputs)[0]
-                    ori = from_numpy(ori, t.device)
+                    ori = self.subprocess(x_t, cond_, t)
                     x_t = ori
 
         x_0 = x_t
